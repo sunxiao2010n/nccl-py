@@ -89,8 +89,11 @@ def LocalTrain():
     print(model)
     return model
 
-model = LocalTrain()
-ddp_model = DDP(NeuralNetwork(), device_ids=[0])
+local_model = LocalTrain()
+device_ids=torch.cuda.device_count()
+print("device ids:" , device_ids);
+rank=0
+ddp_model = DDP(NeuralNetwork().to(rank), device_ids=[rank])
 print(ddp_model)
 
 
@@ -98,7 +101,7 @@ print(ddp_model)
 loss_fn = nn.CrossEntropyLoss()
 
 #单机
-#optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+#optimizer = torch.optim.SGD(local_model.parameters(), lr=1e-3)
 
 #ddp
 optimizer = torch.optim.SGD(ddp_model.parameters(), lr=0.001)
@@ -113,7 +116,7 @@ def train(dataloader, model, loss_fn, optimizer):
         #print(f"Shape of y: {y.shape} {y.dtype}")
         #break
 
-        X, y = X.to(device), y.to(device)
+        X, y = X.to(rank), y.to(rank)
 
         # Compute prediction error
         pred = model(X)
@@ -135,7 +138,7 @@ def test(dataloader, model, loss_fn):
     test_loss, correct = 0, 0
     with torch.no_grad():
         for X, y in dataloader:
-            X, y = X.to(device), y.to(device)
+            X, y = X.to(rank), y.to(rank)
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
@@ -146,6 +149,7 @@ def test(dataloader, model, loss_fn):
 
 epochs = 5
 for t in range(epochs):
+    model=ddp_model
     print(f"Epoch {t+1}\n-------------------------------")
     train(train_dataloader, model, loss_fn, optimizer)
     test(test_dataloader, model, loss_fn)
